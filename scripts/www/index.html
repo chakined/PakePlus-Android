@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>模块化饮食智能规划师</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        /* 隐藏滚动条但保留滚动功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 页面切换动画 */
+        .view-section { display: none; animation: fadeIn 0.2s ease-out; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+        
+        /* 弹窗动画 */
+        .modal { display: none; }
+        .modal.active { display: flex; animation: fadeModal 0.2s ease-out forwards; }
+        @keyframes fadeModal { from { opacity: 0; } to { opacity: 1; } }
+
+        /* 滑块颜色 */
+        input[type="range"] { accent-color: #f59e0b; }
+        input[type="range"].emerald { accent-color: #10b981; }
+
+        /* 防止手机端点击闪烁 */
+        * { -webkit-tap-highlight-color: transparent; }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen sm:p-4 font-sans text-gray-800">
+
+    <div class="w-full h-screen sm:h-[850px] sm:max-w-md bg-[#F8F9FA] sm:rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col sm:border-[6px] border-gray-900">
+        
+        <div class="w-full h-8 bg-white/80 backdrop-blur-md flex justify-between items-center px-6 pt-2 z-50 absolute top-0">
+            <span class="text-xs font-medium text-gray-800">模块化精算师</span>
+            <div class="flex space-x-1.5 items-center">
+                <div class="w-3.5 h-3.5 bg-gray-800 rounded-full"></div>
+                <div class="w-3 h-3 bg-gray-800 rounded-full"></div>
+                <div class="w-2 h-2 bg-gray-800 rounded-full"></div>
+            </div>
+        </div>
+
+        <div id="toast" class="absolute top-16 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-xl text-sm font-medium flex items-center space-x-2 z-[70] hidden whitespace-nowrap transition-opacity duration-300 opacity-0">
+            <i class="ph-fill ph-check-circle text-emerald-400 text-lg"></i>
+            <span id="toast-msg">操作成功</span>
+        </div>
+
+        <div class="flex-1 overflow-y-auto no-scrollbar relative mt-8 pb-24" id="main-content">
+            
+            <div id="view-home" class="view-section active space-y-6">
+                <div class="bg-white pt-4 pb-3 px-4 shadow-sm z-10 sticky top-0">
+                    <h1 class="text-xl font-black text-gray-800 mb-3">模块化看板</h1>
+                    <div id="date-scroll-container" class="flex space-x-3 overflow-x-auto no-scrollbar pb-2">
+                        </div>
+                </div>
+
+                <div class="px-4 space-y-5">
+                    <div class="bg-emerald-600 rounded-[2rem] p-6 shadow-xl text-white relative overflow-hidden">
+                        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-emerald-500 rounded-full opacity-50 blur-2xl"></div>
+                        <div class="relative z-10 flex flex-col">
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <p id="dashboard-date-label" class="text-emerald-100 text-xs font-medium bg-emerald-700/50 inline-block px-2 py-1 rounded-md mb-2">今天 限额</p>
+                                    <p class="text-sm text-emerald-50">剩余可用热量 (千卡)</p>
+                                </div>
+                                <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><i class="ph-fill ph-chart-pie text-xl text-white"></i></div>
+                            </div>
+                            <div id="dashboard-remaining" class="text-6xl font-black tracking-tight mb-6">0</div>
+                            <div class="w-full bg-emerald-800/50 rounded-full h-3 mb-2.5 overflow-hidden shadow-inner">
+                                <div id="dashboard-progress" class="h-full rounded-full bg-amber-400 transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                            <div class="w-full flex justify-between text-xs font-medium text-emerald-100">
+                                <span>已选 <span id="dashboard-planned">0</span></span>
+                                <span>目标 <span id="dashboard-target">0</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="over-limit-alert" class="hidden bg-red-50 text-red-600 p-3.5 rounded-2xl flex items-start space-x-2.5 text-sm border border-red-100 shadow-sm">
+                        <i class="ph-fill ph-warning text-lg mt-0.5 shrink-0"></i>
+                        <p><strong>备菜热量超标！</strong> 当前规划已超出限额，请适当削减食材份数。</p>
+                    </div>
+
+                    <div class="bg-gray-200 p-1 rounded-2xl flex space-x-1 shadow-inner relative z-10 mt-2">
+                        <button onclick="switchHomeView('list')" id="btn-view-list" class="flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-300 bg-white text-gray-900 shadow-sm">🛒 采购备菜清单</button>
+                        <button onclick="switchHomeView('meals')" id="btn-view-meals" class="flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-300 text-gray-500">🍱 三餐分餐安排</button>
+                    </div>
+
+                    <div id="home-subview-list" class="block space-y-4">
+                        <div class="flex justify-between items-end mb-2">
+                            <h3 class="text-lg font-black text-gray-800">买菜合并清单</h3>
+                            <button id="btn-save-preset" onclick="openSavePresetModal()" class="hidden text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100 flex items-center">
+                                <i class="ph-fill ph-floppy-disk mr-1"></i> 存为模板
+                            </button>
+                        </div>
+                        <div id="shopping-list-container">
+                            </div>
+                    </div>
+
+                    <div id="home-subview-meals" class="hidden space-y-4">
+                        <div class="bg-amber-50 border border-amber-100 rounded-2xl p-4 shadow-sm">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="font-bold text-amber-800 text-sm flex items-center"><i class="ph-fill ph-chart-pie mr-1.5"></i> 待分配食材</h3>
+                                <span id="unassigned-count" class="bg-amber-200 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold">0 项</span>
+                            </div>
+                            <div id="unassigned-pool-container" class="flex flex-wrap gap-1.5 mt-2">
+                                </div>
+                        </div>
+                        <div id="meals-container" class="space-y-4">
+                            </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-add" class="view-section p-4 space-y-5 flex flex-col h-full">
+                <div>
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="p-3 bg-amber-100 text-amber-600 rounded-full shadow-sm"><i class="ph-fill ph-calendar-blank text-2xl"></i></div>
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-800">添加备菜与食谱</h2>
+                            <p id="add-date-label" class="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-md mt-1 inline-block">为 今天 规划</p>
+                        </div>
+                    </div>
+                    <div class="bg-gray-200 p-1.5 rounded-2xl flex space-x-1 shadow-inner relative z-10 mb-2 mt-4">
+                        <button onclick="switchAddMode('single')" id="btn-add-single" class="flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 bg-white text-gray-900 shadow-sm">单选食材</button>
+                        <button onclick="switchAddMode('preset')" id="btn-add-preset" class="flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 text-gray-500 flex items-center justify-center space-x-1">
+                            <i id="icon-add-preset" class="ph-fill ph-bookmark-simple"></i><span>食谱模板</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="add-subview-single" class="block space-y-4 flex-1">
+                    <div id="basket-preview" class="hidden bg-amber-50 border border-amber-100 rounded-2xl p-3 shadow-sm">
+                        <div class="flex items-center justify-between mb-2 px-1">
+                            <h3 class="font-bold text-amber-800 text-xs flex items-center"><i class="ph-fill ph-shopping-bag mr-1"></i> 本次已选备菜</h3>
+                            <span id="basket-count" class="text-[10px] text-amber-600">0 项待分餐</span>
+                        </div>
+                        <div id="basket-items-container" class="flex space-x-2 overflow-x-auto no-scrollbar pb-1"></div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 space-y-6">
+                        <div class="space-y-3">
+                            <label class="text-sm font-black text-gray-800 flex items-center"><span class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center mr-2 text-xs">1</span>选择大类</label>
+                            <div id="category-buttons" class="grid grid-cols-2 gap-2"></div>
+                            <p class="text-xs text-emerald-700 bg-emerald-50/80 p-2.5 rounded-lg flex items-center font-medium border border-emerald-100">
+                                <i class="ph-fill ph-info mr-1.5 text-sm shrink-0"></i> <span id="category-rules"></span>
+                            </p>
+                        </div>
+                        <div class="space-y-3 border-t border-gray-100 pt-5">
+                            <label class="text-sm font-black text-gray-800 flex items-center"><span class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center mr-2 text-xs">2</span>选择具体食材</label>
+                            <div class="relative">
+                                <select id="item-select" onchange="updateAddForm()" class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-800 font-bold appearance-none"></select>
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500"><i class="ph-bold ph-caret-down"></i></div>
+                            </div>
+                        </div>
+                        <div class="space-y-4 border-t border-gray-100 pt-5">
+                            <div class="flex justify-between items-center">
+                                <label class="text-sm font-black text-gray-800 flex items-center"><span class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center mr-2 text-xs">3</span>摄入总份数</label>
+                                <span class="text-2xl font-black text-amber-500"><span id="portion-display">1</span> <span class="text-sm text-gray-400 font-medium">份</span></span>
+                            </div>
+                            <input id="portion-range" type="range" min="0.5" max="5" step="0.5" value="1" oninput="updateAddForm()" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                    </div>
+
+                    <div class="bg-white/95 backdrop-blur-xl rounded-[2rem] p-4 shadow-[0_-5px_25px_rgba(0,0,0,0.05)] border border-gray-100 space-y-3">
+                        <div class="flex justify-between items-center px-2">
+                            <div>
+                                <p class="text-gray-400 text-xs mb-0.5 font-medium">预估热量与毛重</p>
+                                <div class="text-2xl font-black text-amber-500">+<span id="preview-kcal">0</span> <span class="text-[10px] font-normal text-gray-400 uppercase">kcal</span></div>
+                            </div>
+                            <div class="text-right"><p id="preview-weight" class="font-bold text-gray-700 text-sm">0 克</p></div>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button onclick="saveSingleItem(true)" class="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-700 font-bold py-3.5 rounded-2xl flex items-center justify-center active:scale-95 transition-all">
+                                <i class="ph-bold ph-plus mr-1 text-lg"></i> 保存并继续
+                            </button>
+                            <button onclick="saveSingleItem(false)" class="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-bold py-3.5 rounded-2xl flex items-center justify-center active:scale-95 transition-all shadow-lg">
+                                <i class="ph-bold ph-check mr-1 text-lg"></i> 完成去分餐
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="add-subview-preset" class="hidden space-y-4 pb-10">
+                    <div id="presets-container"></div>
+                </div>
+            </div>
+
+            <div id="view-profile" class="view-section p-4 space-y-6">
+                <div class="flex items-center space-x-3 mb-6">
+                    <div class="p-3 bg-emerald-100 text-emerald-600 rounded-full"><i class="ph-fill ph-user text-2xl"></i></div>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">身体数据与目标</h2>
+                        <p class="text-xs text-gray-500">基于毛德倩专属公式生成</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 space-y-5">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-bold text-gray-700">性别</span>
+                        <div class="flex bg-gray-100 rounded-lg p-1">
+                            <button id="btn-gender-M" onclick="updateProfile('gender', '男')" class="px-4 py-1.5 text-sm rounded-md transition-all bg-white shadow-sm font-bold text-emerald-600">男</button>
+                            <button id="btn-gender-F" onclick="updateProfile('gender', '女')" class="px-4 py-1.5 text-sm rounded-md transition-all text-gray-500">女</button>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-bold text-gray-700">年龄 <span class="font-normal text-gray-400 text-xs">(岁)</span></span>
+                        <input id="input-age" type="number" oninput="updateProfile('age', this.value)" class="w-24 text-right bg-gray-50 border border-gray-100 rounded-xl p-2.5 outline-none font-bold text-gray-800">
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-bold text-gray-700">身高 <span class="font-normal text-gray-400 text-xs">(cm)</span></span>
+                        <input id="input-height" type="number" oninput="updateProfile('height', this.value)" class="w-24 text-right bg-gray-50 border border-gray-100 rounded-xl p-2.5 outline-none font-bold text-gray-800">
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-bold text-gray-700">体重 <span class="font-normal text-gray-400 text-xs">(kg)</span></span>
+                        <input id="input-weight" type="number" oninput="updateProfile('weight', this.value)" class="w-24 text-right bg-gray-50 border border-gray-100 rounded-xl p-2.5 outline-none font-bold text-gray-800">
+                    </div>
+                    <div class="flex flex-col space-y-2 pt-3 border-t border-gray-100">
+                        <span class="text-sm font-bold text-gray-700">日常活动水平 (PAL)</span>
+                        <select id="select-pal" onchange="updateProfile('pal', this.value)" class="bg-gray-50 border border-gray-100 rounded-xl p-3.5 w-full text-sm outline-none font-medium text-gray-700">
+                            <option value="1.45">轻度体力 (办公室、久坐)</option>
+                            <option value="1.75">中度体力 (销售、家务)</option>
+                            <option value="2.05">重度体力 (建筑、高运动)</option>
+                        </select>
+                    </div>
+                    <div class="flex flex-col space-y-2">
+                        <span class="text-sm font-bold text-gray-700">近期身材目标</span>
+                        <select id="select-goal" onchange="updateProfile('goalAdjustment', this.value)" class="bg-gray-50 border border-gray-100 rounded-xl p-3.5 w-full text-sm outline-none font-medium text-gray-700">
+                            <option value="-300">稳步减脂 (-300千卡)</option>
+                            <option value="-500">快速减脂 (-500千卡)</option>
+                            <option value="0">维持现状 (0千卡)</option>
+                            <option value="300">增肌储备 (+300千卡)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="bg-emerald-600 rounded-3xl p-6 text-white text-center shadow-lg relative overflow-hidden">
+                    <div class="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500 rounded-full opacity-50 blur-xl"></div>
+                    <p class="text-emerald-100 text-sm mb-1 font-medium relative z-10">基准每日热量限额</p>
+                    <div class="text-5xl font-black mb-2 relative z-10"><span id="profile-target">0</span> <span class="text-lg font-normal">kcal</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-save-preset" class="modal fixed inset-0 bg-black/50 z-[60] items-center justify-center p-6">
+            <div class="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl relative">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-black text-gray-800">保存为食谱模板</h3>
+                    <button onclick="closeSavePresetModal()" class="text-gray-400 hover:text-gray-600"><i class="ph-bold ph-x text-xl"></i></button>
+                </div>
+                <p class="text-sm text-gray-500 mb-4">将当前的食材及分餐计划完整保存。</p>
+                <input id="input-preset-name" type="text" placeholder="例如：标准减脂餐A" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6 outline-none focus:ring-2 focus:ring-amber-400 font-bold text-gray-800">
+                <button onclick="confirmSavePreset()" class="w-full bg-gray-900 text-white font-bold py-4 rounded-xl active:scale-95 transition-transform">确 认 保 存</button>
+            </div>
+        </div>
+
+        <div id="modal-assign" class="modal fixed inset-0 bg-black/60 z-[60] items-end justify-center">
+            <div class="bg-white rounded-t-3xl w-full max-w-md p-6 shadow-2xl relative mt-10">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 id="assign-modal-title" class="text-xl font-black text-gray-800">分配到 早餐</h3>
+                    <button onclick="closeAssignModal()" class="p-2 bg-gray-100 rounded-full text-gray-600"><i class="ph-bold ph-x"></i></button>
+                </div>
+                
+                <div id="assign-step-1">
+                    <p class="text-sm font-bold text-gray-500 mb-3">选择备菜池中待分配的食材：</p>
+                    <div id="assign-pool-list" class="max-h-64 overflow-y-auto space-y-2 no-scrollbar"></div>
+                </div>
+
+                <div id="assign-step-2" class="hidden space-y-6 pb-6">
+                    <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between">
+                        <p id="assign-item-name" class="font-bold text-emerald-800">食材名</p>
+                        <button onclick="backToAssignStep1()" class="text-xs text-emerald-600 font-bold bg-white px-2 py-1 rounded shadow-sm">重选食材</button>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-bold text-gray-700">分配份数</span>
+                            <span class="text-2xl font-black text-emerald-600"><span id="assign-portion-display">0.5</span> <span class="text-sm font-normal text-gray-500">份</span></span>
+                        </div>
+                        <input id="assign-portion-range" type="range" min="0.5" max="1" step="0.5" value="0.5" oninput="updateAssignPortionDisplay()" class="emerald w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <div class="flex justify-between text-xs text-gray-400 px-1">
+                            <span>最小: 0.5</span>
+                            <span>最多可用: <span id="assign-max-display">1</span></span>
+                        </div>
+                    </div>
+                    <button onclick="confirmAssignItem()" class="w-full bg-gray-900 text-white font-bold py-4 rounded-xl active:scale-95 transition-transform text-lg">确认分配</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="absolute bottom-0 w-full bg-white/95 backdrop-blur-xl border-t border-gray-100 px-8 py-3 pb-8 flex justify-between items-center z-50 rounded-b-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+            <button onclick="switchTab('home')" id="nav-home" class="flex flex-col items-center space-y-1.5 transition-colors duration-200 text-gray-900">
+                <i id="icon-home" class="ph-fill ph-house text-2xl"></i>
+                <span class="text-[10px] font-bold">看板与安排</span>
+            </button>
+            <button onclick="switchTab('add')" class="flex flex-col items-center transform -translate-y-6">
+                <div id="nav-add-btn" class="w-14 h-14 rounded-[1.25rem] rotate-45 flex items-center justify-center shadow-xl transition-all duration-200 bg-gray-900 shadow-gray-900/30">
+                    <div class="-rotate-45 text-white"><i class="ph-bold ph-plus-circle text-3xl"></i></div>
+                </div>
+                <span id="nav-add-text" class="text-[10px] font-bold text-gray-700 mt-2">加食材</span>
+            </button>
+            <button onclick="switchTab('profile')" id="nav-profile" class="flex flex-col items-center space-y-1.5 transition-colors duration-200 text-gray-400">
+                <i id="icon-profile" class="ph ph-user text-2xl"></i>
+                <span class="text-[10px] font-bold">限额设定</span>
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 数据字典 ---
+        const FOOD_DATABASE = {
+            "水果": { kcalPerPortion: 100, rules: "每天至少2份", items: [{ name: "苹果", weight: 250, unit: "克" }, { name: "梨", weight: 250, unit: "克" }, { name: "葡萄", weight: 250, unit: "克" }, { name: "草莓", weight: 250, unit: "克" }, { name: "西瓜", weight: 500, unit: "克" }, { name: "香蕉", weight: 150, unit: "克" }] },
+            "蔬菜": { kcalPerPortion: 50, rules: "每天至少3份", items: [{ name: "西红柿", weight: 200, unit: "克" }, { name: "黄瓜", weight: 300, unit: "克" }, { name: "西蓝花", weight: 150, unit: "克" }, { name: "生菜", weight: 350, unit: "克" }, { name: "白萝卜", weight: 200, unit: "克" }, { name: "冬瓜", weight: 500, unit: "克" }, { name: "秋葵", weight: 300, unit: "克" }, { name: "洋葱", weight: 150, unit: "克" }] },
+            "肉类": { kcalPerPortion: 200, rules: "只限1份", items: [{ name: "鸡胸肉", weight: 150, unit: "克" }, { name: "纯瘦牛肉", weight: 150, unit: "克" }, { name: "草鱼", weight: 300, unit: "克" }, { name: "基围虾", weight: 300, unit: "克" }, { name: "生蚝", weight: 850, unit: "克" }] },
+            "蛋类": { kcalPerPortion: 100, rules: "全蛋每天只限2份", items: [{ name: "鸡蛋", weight: 1, unit: "个" }, { name: "蛋清", weight: 4, unit: "个" }] },
+            "奶类": { kcalPerPortion: 100, rules: "不限份数", items: [{ name: "全脂牛奶", weight: 150, unit: "毫升" }, { name: "酸奶", weight: 100, unit: "毫升" }, { name: "脱脂奶", weight: 300, unit: "毫升" }] },
+            "豆类": { kcalPerPortion: 50, rules: "只限3份", items: [{ name: "黄豆", weight: 15, unit: "克" }, { name: "北豆腐", weight: 50, unit: "克" }, { name: "豆浆", weight: 300, unit: "毫升" }] },
+            "A类主食": { kcalPerPortion: 350, rules: "除面包外为生重", items: [{ name: "意面", weight: 85, unit: "克" }, { name: "燕麦片", weight: 85, unit: "克" }, { name: "大米", weight: 85, unit: "克" }, { name: "全麦面包", weight: 85, unit: "克" }] },
+            "B类主食": { kcalPerPortion: 150, rules: "每天至少2份", items: [{ name: "糙米饭", weight: 100, unit: "克" }, { name: "生鲜玉米", weight: 100, unit: "克" }, { name: "生红薯", weight: 100, unit: "克" }] },
+            "植物油": { kcalPerPortion: 50, rules: "只限3份", items: [{ name: "橄榄油", weight: 5, unit: "克" }, { name: "亚麻籽油", weight: 5, unit: "克" }] },
+            "坚果及种子": { kcalPerPortion: 50, rules: "只限2份", items: [{ name: "核桃仁", weight: 10, unit: "克" }, { name: "杏仁", weight: 10, unit: "克" }, { name: "花生仁", weight: 10, unit: "克" }] }
+        };
+
+        const MEAL_TYPES = [
+            { id: '早餐', icon: 'ph-sun', color: 'text-amber-500', bg: 'bg-amber-100' },
+            { id: '午餐', icon: 'ph-sun-dim', color: 'text-orange-500', bg: 'bg-orange-100' },
+            { id: '晚餐', icon: 'ph-moon', color: 'text-indigo-500', bg: 'bg-indigo-100' },
+            { id: '加餐', icon: 'ph-coffee', color: 'text-emerald-500', bg: 'bg-emerald-100' }
+        ];
+
+        // --- 全局状态变量 ---
+        let activeTab = 'home';
+        let homeView = 'list';
+        let addMode = 'single';
+        let availableDates = [];
+        let selectedDate = '';
+        
+        let profile = { gender: '男', age: 28, height: 163, weight: 62.5, pal: 1.45, goalAdjustment: -300 };
+        let plans = {};
+        let assignments = {};
+        let presets = [
+            {
+                id: 'default_1', name: '减脂标准餐A (含分餐)',
+                items: [
+                    { id: 'd1', category: '肉类', name: '鸡胸肉', portions: 1, unit: '克', kcalPerPortion: 200, weightPerPortion: 150, totalKcal: 200, totalWeight: 150 },
+                    { id: 'd2', category: '蔬菜', name: '西蓝花', portions: 1, unit: '克', kcalPerPortion: 50, weightPerPortion: 150, totalKcal: 50, totalWeight: 150 },
+                    { id: 'd3', category: '蛋类', name: '鸡蛋', portions: 2, unit: '个', kcalPerPortion: 100, weightPerPortion: 1, totalKcal: 200, totalWeight: 2 },
+                    { id: 'd4', category: 'A类主食', name: '燕麦片', portions: 1, unit: '克', kcalPerPortion: 350, weightPerPortion: 85, totalKcal: 350, totalWeight: 85 }
+                ],
+                assignments: [
+                    { id: 'a1', planId: 'd3', mealType: '早餐', portions: 1 },
+                    { id: 'a2', planId: 'd4', mealType: '早餐', portions: 1 },
+                    { id: 'a3', planId: 'd1', mealType: '午餐', portions: 1 },
+                    { id: 'a4', planId: 'd2', mealType: '午餐', portions: 1 },
+                    { id: 'a5', planId: 'd3', mealType: '晚餐', portions: 1 }
+                ]
+            }
+        ];
+
+        // Add 页面临时状态
+        let addSelectedCat = Object.keys(FOOD_DATABASE)[0];
+        let addSelectedItem = FOOD_DATABASE[addSelectedCat].items[0].name;
+
+        // Assign 弹窗临时状态
+        let currentAssignMeal = null;
+        let currentAssignItem = null;
+
+        // --- 初始化与本地存储 ---
+        function initApp() {
+            // 生成日期
+            const today = new Date();
+            for (let i = 0; i < 14; i++) {
+                const d = new Date(today);
+                d.setDate(today.getDate() + i);
+                availableDates.push(d.toISOString().split('T')[0]);
+            }
+            selectedDate = availableDates[0];
+
+            // 读取 LocalStorage
+            if(localStorage.getItem('dietProfile')) profile = JSON.parse(localStorage.getItem('dietProfile'));
+            if(localStorage.getItem('dietPlans')) plans = JSON.parse(localStorage.getItem('dietPlans'));
+            if(localStorage.getItem('dietAssignments')) assignments = JSON.parse(localStorage.getItem('dietAssignments'));
+            if(localStorage.getItem('dietPresets')) presets = JSON.parse(localStorage.getItem('dietPresets'));
+
+            // 绑定事件到表单
+            document.getElementById('input-age').value = profile.age;
+            document.getElementById('input-height').value = profile.height;
+            document.getElementById('input-weight').value = profile.weight;
+            document.getElementById('select-pal').value = profile.pal;
+            document.getElementById('select-goal').value = profile.goalAdjustment;
+            updateProfileGenderUI();
+
+            renderDates();
+            renderAddCategoryButtons();
+            updateAddForm();
+            refreshAllViews();
+        }
+
+        function saveData() {
+            localStorage.setItem('dietProfile', JSON.stringify(profile));
+            localStorage.setItem('dietPlans', JSON.stringify(plans));
+            localStorage.setItem('dietAssignments', JSON.stringify(assignments));
+            localStorage.setItem('dietPresets', JSON.stringify(presets));
+        }
+
+        // --- UI 辅助方法 ---
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.remove('opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.classList.add('hidden'), 300);
+            }, 2000);
+        }
+
+        function switchTab(tab) {
+            activeTab = tab;
+            document.getElementById('view-home').classList.toggle('active', tab === 'home');
+            document.getElementById('view-add').classList.toggle('active', tab === 'add');
+            document.getElementById('view-profile').classList.toggle('active', tab === 'profile');
+
+            // 底部导航栏颜色变化
+            document.getElementById('nav-home').className = `flex flex-col items-center space-y-1.5 transition-colors duration-200 ${tab === 'home' ? 'text-gray-900' : 'text-gray-400'}`;
+            document.getElementById('icon-home').className = `ph-house text-2xl ${tab === 'home' ? 'ph-fill' : 'ph'}`;
+            
+            document.getElementById('nav-profile').className = `flex flex-col items-center space-y-1.5 transition-colors duration-200 ${tab === 'profile' ? 'text-gray-900' : 'text-gray-400'}`;
+            document.getElementById('icon-profile').className = `ph-user text-2xl ${tab === 'profile' ? 'ph-fill' : 'ph'}`;
+
+            const addBtn = document.getElementById('nav-add-btn');
+            addBtn.className = `w-14 h-14 rounded-[1.25rem] rotate-45 flex items-center justify-center shadow-xl transition-all duration-200 active:scale-90 ${tab === 'add' ? 'bg-amber-500 shadow-amber-500/30' : 'bg-gray-900 shadow-gray-900/30'}`;
+            document.getElementById('nav-add-text').className = `text-[10px] font-bold mt-2 ${tab === 'add' ? 'text-amber-600' : 'text-gray-700'}`;
+
+            if(tab === 'home') document.getElementById('main-content').scrollTo(0,0);
+            refreshAllViews();
+        }
+
+        // --- 核心计算 ---
+        function getTargetKcal() {
+            let bmr = profile.gender === '男' 
+                ? 13.86 * profile.weight + 4.13 * profile.height - 2.57 * profile.age + 479
+                : 9.24 * profile.weight + 4.33 * profile.height - 2.57 * profile.age + 400;
+            return Math.round((bmr * profile.pal) + Number(profile.goalAdjustment));
+        }
+
+        function getUnassignedPool() {
+            const currentPlans = plans[selectedDate] || [];
+            const currentAssigns = assignments[selectedDate] || [];
+            return currentPlans.map(plan => {
+                const assignedTotal = currentAssigns.filter(a => a.planId === plan.id).reduce((sum, a) => sum + a.portions, 0);
+                return { ...plan, unassignedPortions: Number((plan.portions - assignedTotal).toFixed(1)) };
+            }).filter(plan => plan.unassignedPortions > 0);
+        }
+
+        // --- Profile 模块 ---
+        function updateProfile(key, value) {
+            profile[key] = key === 'gender' ? value : Number(value);
+            if(key === 'gender') updateProfileGenderUI();
+            saveData();
+            refreshAllViews();
+        }
+        function updateProfileGenderUI() {
+            const btnM = document.getElementById('btn-gender-M');
+            const btnF = document.getElementById('btn-gender-F');
+            if(profile.gender === '男') {
+                btnM.className = "px-4 py-1.5 text-sm rounded-md transition-all bg-white shadow-sm font-bold text-emerald-600";
+                btnF.className = "px-4 py-1.5 text-sm rounded-md transition-all text-gray-500";
+            } else {
+                btnM.className = "px-4 py-1.5 text-sm rounded-md transition-all text-gray-500";
+                btnF.className = "px-4 py-1.5 text-sm rounded-md transition-all bg-white shadow-sm font-bold text-emerald-600";
+            }
+        }
+
+        // --- Home 模块 ---
+        function renderDates() {
+            const container = document.getElementById('date-scroll-container');
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+            
+            let html = '';
+            availableDates.forEach((dateStr, index) => {
+                const isSelected = dateStr === selectedDate;
+                const d = new Date(dateStr);
+                const isToday = index === 0;
+                const hasPlan = (plans[dateStr] && plans[dateStr].length > 0);
+                
+                const btnClass = isSelected 
+                    ? 'bg-gray-900 border-gray-900 text-white shadow-md scale-105' 
+                    : 'bg-white border-gray-100 text-gray-500 hover:bg-gray-50';
+                const labelClass = isSelected ? 'text-gray-300' : (isToday ? 'text-emerald-500 font-bold' : '');
+                const numClass = isSelected ? 'text-white' : 'text-gray-800';
+                const dotClass = isSelected ? 'bg-amber-400' : 'bg-emerald-400';
+
+                html += `
+                    <button onclick="selectDate('${dateStr}')" class="flex flex-col items-center justify-center min-w-[3.5rem] h-16 rounded-2xl transition-all border ${btnClass}">
+                        <span class="text-[10px] font-medium ${labelClass}">${isToday ? '今天' : '周'+weekdays[d.getDay()]}</span>
+                        <span class="text-lg font-black mt-0.5 ${numClass}">${d.getDate()}</span>
+                        ${hasPlan ? `<div class="w-1.5 h-1.5 rounded-full mt-1 ${dotClass}"></div>` : ''}
+                    </button>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function selectDate(dateStr) {
+            selectedDate = dateStr;
+            renderDates();
+            refreshAllViews();
+        }
+
+        function switchHomeView(view) {
+            homeView = view;
+            document.getElementById('btn-view-list').className = `flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-300 ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`;
+            document.getElementById('btn-view-meals').className = `flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-300 ${view === 'meals' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`;
+            
+            document.getElementById('home-subview-list').className = view === 'list' ? 'block space-y-4' : 'hidden';
+            document.getElementById('home-subview-meals').className = view === 'meals' ? 'block space-y-4' : 'hidden';
+            
+            if(view === 'list') renderShoppingList();
+            if(view === 'meals') renderMeals();
+        }
+
+        function updateDashboard() {
+            const target = getTargetKcal();
+            const currentPlans = plans[selectedDate] || [];
+            const plannedKcal = currentPlans.reduce((sum, item) => sum + item.totalKcal, 0);
+            const remaining = target - plannedKcal;
+            let percent = (plannedKcal / target) * 100;
+            if(percent > 100) percent = 100;
+
+            document.getElementById('profile-target').innerText = target; // Update profile tab too
+            document.getElementById('dashboard-target').innerText = target;
+            document.getElementById('dashboard-planned').innerText = plannedKcal;
+            document.getElementById('dashboard-remaining').innerText = remaining > 0 ? remaining : 0;
+            
+            const progress = document.getElementById('dashboard-progress');
+            progress.style.width = percent + '%';
+            if(remaining < 0) {
+                progress.className = "h-full rounded-full transition-all duration-500 bg-red-400";
+                document.getElementById('over-limit-alert').classList.remove('hidden');
+            } else {
+                progress.className = "h-full rounded-full transition-all duration-500 bg-amber-400";
+                document.getElementById('over-limit-alert').classList.add('hidden');
+            }
+
+            // 更新标签文本
+            const dateObj = new Date(selectedDate);
+            const today = new Date().toISOString().split('T')[0];
+            const tomorrow = new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0];
+            let dateLabel = `${dateObj.getMonth()+1}/${dateObj.getDate()}`;
+            if(selectedDate === today) dateLabel = '今天';
+            else if(selectedDate === tomorrow) dateLabel = '明天';
+            
+            document.getElementById('dashboard-date-label').innerText = `${dateLabel} 限额`;
+            document.getElementById('add-date-label').innerText = `为 ${dateLabel} 规划`;
+        }
+
+        function renderShoppingList() {
+            const currentPlans = plans[selectedDate] || [];
+            const container = document.getElementById('shopping-list-container');
+            const btnSave = document.getElementById('btn-save-preset');
+
+            if (currentPlans.length > 0) {
+                btnSave.classList.remove('hidden');
+            } else {
+                btnSave.classList.add('hidden');
+                container.innerHTML = `
+                    <div class="text-center py-12 bg-white rounded-3xl border border-dashed border-gray-200 shadow-sm">
+                        <i class="ph-fill ph-shopping-bag text-4xl text-gray-200 mb-3 block"></i>
+                        <p class="text-gray-500 text-sm font-medium">还没有选择任何食材</p>
+                        <button onclick="switchTab('add')" class="mt-4 bg-gray-900 text-white px-5 py-2 rounded-xl text-sm font-bold">去选食材</button>
+                    </div>`;
+                return;
+            }
+
+            const groups = {};
+            currentPlans.forEach(item => {
+                if (!groups[item.category]) groups[item.category] = { totalWeight: 0, unit: item.unit, items: [] };
+                groups[item.category].totalWeight += item.totalWeight;
+                groups[item.category].items.push(item);
+            });
+
+            let html = '<div class="space-y-4">';
+            for (let category in groups) {
+                const group = groups[category];
+                html += `
+                    <div class="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                        <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                            <span class="font-bold text-gray-800">${category}</span>
+                            <div class="text-xs font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-md">总需买: ${group.totalWeight.toFixed(1)} ${group.unit}</div>
+                        </div>
+                        <div class="divide-y divide-gray-50">
+                            ${group.items.map(item => `
+                                <div class="p-4 flex justify-between items-center">
+                                    <div>
+                                        <p class="font-bold text-gray-800 text-sm">${item.name}</p>
+                                        <p class="text-xs text-gray-500 mt-1">${item.portions} 份 • ${item.totalWeight} ${item.unit}</p>
+                                    </div>
+                                    <div class="flex items-center space-x-3">
+                                        <div class="text-right">
+                                            <p class="font-black text-emerald-600 text-sm">${item.totalKcal}</p>
+                                            <p class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">kcal</p>
+                                        </div>
+                                        <button onclick="removePlanItem('${item.id}')" class="w-6 h-6 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center hover:bg-red-50 hover:text-red-500">
+                                            <i class="ph-bold ph-x text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderMeals() {
+            const unassigned = getUnassignedPool();
+            document.getElementById('unassigned-count').innerText = unassigned.length + ' 项';
+            
+            const poolContainer = document.getElementById('unassigned-pool-container');
+            if(unassigned.length === 0) {
+                poolContainer.innerHTML = '<p class="text-xs text-amber-600/70 w-full mt-1">所有选定食材均已安排完毕，或尚未添加食材。</p>';
+            } else {
+                poolContainer.innerHTML = unassigned.map(item => `
+                    <span class="bg-white border border-amber-200 text-amber-700 text-xs px-2 py-1 rounded-lg shadow-sm">
+                        ${item.name} <span class="font-bold">${item.unassignedPortions}</span>份
+                    </span>
+                `).join('');
+            }
+
+            const currentPlans = plans[selectedDate] || [];
+            const currentAssigns = assignments[selectedDate] || [];
+            const container = document.getElementById('meals-container');
+            
+            let html = '';
+            MEAL_TYPES.forEach(meal => {
+                const assignedItems = currentAssigns.filter(a => a.mealType === meal.id);
+                const mealKcal = assignedItems.reduce((sum, a) => {
+                    const planItem = currentPlans.find(p => p.id === a.planId);
+                    return sum + (planItem ? Math.round(planItem.kcalPerPortion * a.portions) : 0);
+                }, 0);
+
+                let itemsHtml = assignedItems.map(a => {
+                    const planItem = currentPlans.find(p => p.id === a.planId);
+                    if(!planItem) return '';
+                    const aKcal = Math.round(planItem.kcalPerPortion * a.portions);
+                    const aWeight = (planItem.weightPerPortion * a.portions).toFixed(1);
+                    return `
+                        <div class="flex justify-between items-center bg-gray-50 px-4 py-3 rounded-2xl">
+                            <div class="flex-1">
+                                <p class="font-bold text-gray-800 text-sm">${planItem.name}</p>
+                                <p class="text-xs text-gray-500">${a.portions} 份 • ${aWeight}${planItem.unit}</p>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <span class="font-bold text-emerald-600 text-sm">${aKcal} <span class="text-[10px] font-normal text-gray-400">kcal</span></span>
+                                <button onclick="removeAssignment('${a.id}')" class="w-7 h-7 rounded-full bg-white text-gray-400 shadow-sm flex items-center justify-center hover:text-red-500">
+                                    <i class="ph-bold ph-x text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                html += `
+                    <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div class="px-5 py-4 border-b border-gray-50 flex justify-between items-center">
+                            <div class="flex items-center space-x-3">
+                                <div class="p-2 rounded-xl ${meal.bg} ${meal.color}"><i class="ph-fill ${meal.icon} text-xl"></i></div>
+                                <h3 class="font-black text-gray-800 text-lg">${meal.id}</h3>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-black text-gray-800">${mealKcal}</p>
+                                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">kcal</p>
+                            </div>
+                        </div>
+                        <div class="p-2 space-y-1">
+                            ${itemsHtml}
+                            <button onclick="openAssignModal('${meal.id}')" class="w-full mt-2 py-3 border-2 border-dashed border-gray-200 rounded-2xl text-gray-500 text-sm font-bold flex justify-center items-center hover:bg-gray-50 transition-colors">
+                                <i class="ph-bold ph-plus-circle mr-1.5 text-lg"></i> 从备菜池中分配
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function removePlanItem(id) {
+            plans[selectedDate] = (plans[selectedDate] || []).filter(i => i.id !== id);
+            assignments[selectedDate] = (assignments[selectedDate] || []).filter(a => a.planId !== id);
+            saveData();
+            refreshAllViews();
+        }
+
+        function removeAssignment(id) {
+            assignments[selectedDate] = (assignments[selectedDate] || []).filter(a => a.id !== id);
+            saveData();
+            refreshAllViews();
+        }
+
+        // --- Add 模块 ---
+        function switchAddMode(mode) {
+            addMode = mode;
+            document.getElementById('btn-add-single').className = `flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${mode === 'single' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`;
+            const btnPreset = document.getElementById('btn-add-preset');
+            btnPreset.className = `flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 flex items-center justify-center space-x-1 ${mode === 'preset' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500'}`;
+            document.getElementById('icon-add-preset').className = `ph-bookmark-simple ${mode === 'preset' ? 'ph-fill text-amber-400' : 'ph'}`;
+
+            document.getElementById('add-subview-single').className = mode === 'single' ? 'block space-y-4 flex-1' : 'hidden';
+            document.getElementById('add-subview-preset').className = mode === 'preset' ? 'block space-y-4 pb-10' : 'hidden';
+            
+            if(mode === 'preset') renderPresets();
+        }
+
+        function renderAddCategoryButtons() {
+            const container = document.getElementById('category-buttons');
+            let html = '';
+            for (let cat in FOOD_DATABASE) {
+                const isActive = cat === addSelectedCat;
+                html += `
+                    <button onclick="selectCategory('${cat}')" class="p-2.5 text-sm rounded-xl border text-center transition-all duration-200 ${isActive ? 'bg-gray-900 border-gray-900 text-white font-bold shadow-md' : 'border-gray-200 text-gray-600 bg-white'}">
+                        ${cat}
+                    </button>
+                `;
+            }
+            container.innerHTML = html;
+            document.getElementById('category-rules').innerText = FOOD_DATABASE[addSelectedCat].rules;
+            renderItemSelect();
+        }
+
+        function selectCategory(cat) {
+            addSelectedCat = cat;
+            addSelectedItem = FOOD_DATABASE[cat].items[0].name;
+            renderAddCategoryButtons();
+            updateAddForm();
+        }
+
+        function renderItemSelect() {
+            const select = document.getElementById('item-select');
+            let html = '';
+            FOOD_DATABASE[addSelectedCat].items.forEach(item => {
+                html += `<option value="${item.name}" ${item.name === addSelectedItem ? 'selected' : ''}>${item.name}</option>`;
+            });
+            select.innerHTML = html;
+        }
+
+        function updateAddForm() {
+            addSelectedItem = document.getElementById('item-select').value;
+            const portion = Number(document.getElementById('portion-range').value);
+            document.getElementById('portion-display').innerText = portion;
+
+            const cData = FOOD_DATABASE[addSelectedCat];
+            const iData = cData.items.find(i => i.name === addSelectedItem);
+            
+            const kcal = Math.round(cData.kcalPerPortion * portion);
+            const weight = (iData.weight * portion).toFixed(1);
+
+            document.getElementById('preview-kcal').innerText = kcal;
+            document.getElementById('preview-weight').innerText = `${weight} ${iData.unit}`;
+            
+            renderBasketPreview();
+        }
+
+        function renderBasketPreview() {
+            const unassigned = getUnassignedPool();
+            const container = document.getElementById('basket-preview');
+            if(unassigned.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+            container.classList.remove('hidden');
+            document.getElementById('basket-count').innerText = `${unassigned.length} 项待分餐`;
+            
+            let html = '';
+            unassigned.forEach(item => {
+                html += `
+                    <div class="shrink-0 bg-white border border-amber-200 pl-2 pr-1 py-1 rounded-lg shadow-sm flex items-center">
+                        <span class="text-xs text-amber-800 font-medium mr-1.5">${item.name} <span class="font-bold">${item.unassignedPortions}</span>份</span>
+                        <button onclick="removePlanItem('${item.id}')" class="w-5 h-5 rounded-full bg-gray-100 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center">
+                            <i class="ph-bold ph-x text-[10px]"></i>
+                        </button>
+                    </div>
+                `;
+            });
+            document.getElementById('basket-items-container').innerHTML = html;
+        }
+
+        function saveSingleItem(shouldContinue) {
+            const portion = Number(document.getElementById('portion-range').value);
+            const cData = FOOD_DATABASE[addSelectedCat];
+            const iData = cData.items.find(i => i.name === addSelectedItem);
+            
+            const newItem = {
+                id: Date.now().toString(),
+                category: addSelectedCat,
+                name: addSelectedItem,
+                portions: portion,
+                unit: iData.unit,
+                kcalPerPortion: cData.kcalPerPortion,
+                weightPerPortion: iData.weight,
+                totalKcal: Math.round(cData.kcalPerPortion * portion),
+                totalWeight: Number((iData.weight * portion).toFixed(1))
+            };
+
+            if (!plans[selectedDate]) plans[selectedDate] = [];
+            plans[selectedDate].unshift(newItem); // 加到前面
+            saveData();
+
+            if (shouldContinue) {
+                showToast(`${addSelectedItem} 已加入`);
+                document.getElementById('portion-range').value = 1;
+                updateAddForm();
+            } else {
+                showToast('已加入，去安排三餐吧');
+                switchTab('home');
+                switchHomeView('meals');
+            }
+        }
+
+        // --- 预设食谱功能 ---
+        function renderPresets() {
+            const container = document.getElementById('presets-container');
+            if (presets.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 bg-white rounded-3xl border border-dashed border-gray-200 shadow-sm">
+                        <i class="ph-fill ph-bookmark-simple text-4xl text-gray-300 mb-3 block"></i>
+                        <p class="text-gray-500 text-sm font-medium">还没有保存过食谱</p>
+                    </div>`;
+                return;
+            }
+
+            let html = '';
+            presets.forEach(preset => {
+                const totalKcal = preset.items.reduce((sum, item) => sum + item.totalKcal, 0);
+                const tags = preset.items.map(i => `<span class="bg-gray-50 border border-gray-200 text-gray-600 text-xs px-2 py-1 rounded-lg whitespace-nowrap">${i.name} ${i.portions}份</span>`).join('');
+                
+                html += `
+                    <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 relative overflow-hidden group">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex items-center space-x-2">
+                                <div class="bg-amber-100 p-2 rounded-xl text-amber-600"><i class="ph-fill ph-file-text text-xl"></i></div>
+                                <h3 class="font-black text-gray-800 text-lg">${preset.name}</h3>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-emerald-600 font-black text-lg">${totalKcal}</p>
+                                <p class="text-[10px] text-gray-400 font-bold uppercase">kcal 总计</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5 mb-5">${tags}</div>
+                        <button onclick="importPreset('${preset.id}')" class="w-full bg-gray-900 text-white py-3.5 rounded-xl font-bold flex justify-center items-center space-x-2 active:scale-95 transition-all shadow-md">
+                            <i class="ph-bold ph-plus-circle text-amber-400 text-lg"></i>
+                            <span>一键导入到此日</span>
+                        </button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function importPreset(presetId) {
+            const preset = presets.find(p => p.id === presetId);
+            if(!preset) return;
+            
+            const timestamp = Date.now();
+            const newItems = preset.items.map((item, idx) => ({ ...item, id: `${timestamp}_${idx}` }));
+            const newAssigns = (preset.assignments || []).map((a, idx) => {
+                const itemIndex = preset.items.findIndex(i => i.id === a.planId);
+                return { ...a, id: `a_${timestamp}_${idx}`, planId: `${timestamp}_${itemIndex}` };
+            });
+
+            if(!plans[selectedDate]) plans[selectedDate] = [];
+            if(!assignments[selectedDate]) assignments[selectedDate] = [];
+            
+            plans[selectedDate] = [...newItems, ...plans[selectedDate]];
+            assignments[selectedDate] = [...newAssigns, ...assignments[selectedDate]];
+            
+            saveData();
+            showToast(`已导入【${preset.name}】`);
+            switchTab('home');
+        }
+
+        // 保存模板 Modal
+        function openSavePresetModal() {
+            document.getElementById('modal-save-preset').classList.add('active');
+            document.getElementById('input-preset-name').focus();
+        }
+        function closeSavePresetModal() {
+            document.getElementById('modal-save-preset').classList.remove('active');
+            document.getElementById('input-preset-name').value = '';
+        }
+        function confirmSavePreset() {
+            const name = document.getElementById('input-preset-name').value.trim();
+            if(!name) return showToast('请输入食谱名称');
+            
+            const currentPlans = plans[selectedDate] || [];
+            const currentAssigns = assignments[selectedDate] || [];
+            
+            const newPreset = {
+                id: Date.now().toString(),
+                name: name,
+                items: JSON.parse(JSON.stringify(currentPlans)),
+                assignments: JSON.parse(JSON.stringify(currentAssigns))
+            };
+            
+            presets.push(newPreset);
+            saveData();
+            closeSavePresetModal();
+            showToast(`已保存模板：${name}`);
+        }
+
+        // --- 分餐 Modal ---
+        function openAssignModal(mealType) {
+            currentAssignMeal = mealType;
+            document.getElementById('assign-modal-title').innerText = `分配到 ${mealType}`;
+            document.getElementById('modal-assign').classList.add('active');
+            renderAssignStep1();
+        }
+        function closeAssignModal() {
+            document.getElementById('modal-assign').classList.remove('active');
+        }
+
+        function renderAssignStep1() {
+            document.getElementById('assign-step-1').classList.remove('hidden');
+            document.getElementById('assign-step-2').classList.add('hidden');
+            
+            const unassigned = getUnassignedPool();
+            const list = document.getElementById('assign-pool-list');
+            
+            if(unassigned.length === 0) {
+                list.innerHTML = `<div class="text-center py-10"><p class="text-gray-500 text-sm">暂无可分配食材，请先去“加食材”</p></div>`;
+                return;
+            }
+            
+            let html = '';
+            unassigned.forEach(item => {
+                // 将对象转为 JSON 存入 dataset 以防引号冲突
+                html += `
+                    <button onclick="goToAssignStep2('${item.id}')" class="w-full flex justify-between items-center p-4 bg-gray-50 hover:bg-emerald-50 border border-gray-100 rounded-2xl text-left transition-colors">
+                        <div>
+                            <p class="font-bold text-gray-800">${item.name}</p>
+                            <p class="text-xs text-gray-500">剩余 ${item.unassignedPortions} 份可用</p>
+                        </div>
+                        <i class="ph-bold ph-caret-right text-gray-400 text-lg"></i>
+                    </button>
+                `;
+            });
+            list.innerHTML = html;
+        }
+
+        function goToAssignStep2(itemId) {
+            const unassigned = getUnassignedPool();
+            currentAssignItem = unassigned.find(i => i.id === itemId);
+            if(!currentAssignItem) return;
+
+            document.getElementById('assign-step-1').classList.add('hidden');
+            document.getElementById('assign-step-2').classList.remove('hidden');
+            
+            document.getElementById('assign-item-name').innerText = currentAssignItem.name;
+            const range = document.getElementById('assign-portion-range');
+            range.max = currentAssignItem.unassignedPortions;
+            range.value = Math.min(1, currentAssignItem.unassignedPortions);
+            document.getElementById('assign-max-display').innerText = currentAssignItem.unassignedPortions;
+            updateAssignPortionDisplay();
+        }
+
+        function backToAssignStep1() {
+            renderAssignStep1();
+        }
+
+        function updateAssignPortionDisplay() {
+            document.getElementById('assign-portion-display').innerText = document.getElementById('assign-portion-range').value;
+        }
+
+        function confirmAssignItem() {
+            if(!currentAssignItem) return;
+            const portion = Number(document.getElementById('assign-portion-range').value);
+            
+            const newAssignment = {
+                id: Date.now().toString(),
+                planId: currentAssignItem.id,
+                mealType: currentAssignMeal,
+                portions: portion
+            };
+            
+            if(!assignments[selectedDate]) assignments[selectedDate] = [];
+            assignments[selectedDate].push(newAssignment);
+            saveData();
+            
+            closeAssignModal();
+            showToast(`已分配到 ${currentAssignMeal}`);
+            refreshAllViews();
+        }
+
+        // --- 全局刷新 ---
+        function refreshAllViews() {
+            updateDashboard();
+            if(activeTab === 'home') switchHomeView(homeView);
+            if(activeTab === 'add') {
+                updateAddForm(); 
+                if(addMode === 'preset') renderPresets();
+            }
+        }
+
+        // 启动 App
+        initApp();
+    </script>
+</body>
+</html>
